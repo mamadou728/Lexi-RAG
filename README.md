@@ -1,4 +1,5 @@
 # 🏛️ Lexi-RAG: A Privacy-First Legal Retrieval System  
+**_AI-powered legal retrieval system built for privacy, precision, and trust._**  
 **_Personal Project — In Progress_**
 
 ---
