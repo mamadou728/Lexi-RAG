@@ -5,18 +5,18 @@
 
 ### 🧠 What Is Lexi-RAG?
 
-Lexi-RAG is a **personal AI engineering project** that explores how **Retrieval-Augmented Generation (RAG)** can power a **law-firm knowledge system** designed around privacy, access control, and real-world security constraints.
+Lexi-RAG is a **personal AI engineering project** exploring how **Retrieval-Augmented Generation (RAG)** can power a **law-firm knowledge system** designed around privacy, access control, and real-world security constraints.
 
-Rather than building another general RAG chatbot, this project focuses on **how retrieval systems behave in high-risk environments**, where every query and document must respect **confidentiality, encryption rules, and legal privilege**.
+Rather than building a generic RAG chatbot, this project focuses on **how retrieval systems operate in high-risk environments**, where every query and document must respect **confidentiality, encryption, and legal privilege**.
 
-> _Goal: Understand how to design intelligent retrieval systems that are safe, private, and compliant in data-sensitive industries._
+> _Goal: Learn how to design intelligent retrieval systems that remain safe, private, and compliant in data-sensitive industries._
 
 ---
 
 ### ⚖️ Why a Law-Firm Use Case?
 
-Law firms generate enormous volumes of **unstructured information** — contracts, filings, memos, emails, evidence, and invoices — all protected by confidentiality agreements.  
-Because this data rarely follows a fixed schema, **MongoDB** is used to store it flexibly while still allowing structured queries.
+Law firms generate massive volumes of **unstructured information** — contracts, filings, memos, emails, evidence, and invoices — all protected by confidentiality agreements.  
+Because this data rarely follows a fixed schema, **MongoDB** is used to store it flexibly while still supporting structured queries.
 
 Lexi-RAG envisions a secure AI assistant that helps each role differently:
 - **Lawyers and partners:** Search legal clauses, filings, and case summaries.  
@@ -30,53 +30,59 @@ Everything operates under strict privacy layers to preserve legal privilege.
 
 ### 💡 Project Purpose
 
-Lexi-RAG is a **learning-driven project** that combines **AI retrieval** with **data security principles**.  
-Through it, I aim to deepen my understanding of:
+Lexi-RAG combines **AI retrieval** with **data-security principles**.  
+Through this project, I aim to strengthen my understanding of:
 
 - 🧩 **RAG architecture:** Connecting embeddings, vector databases, and LLM reasoning.  
 - 🔐 **Data governance:** Enforcing visibility by user role, case, and privilege level.  
-- 🧬 **Encrypted embeddings:** Studying how encryption affects retrieval accuracy and system performance.  
+- 🧬 **Encrypted embeddings:** Exploring how encryption influences retrieval accuracy and latency.  
 - ⚙️ **Secure system design:** Building layered databases and metadata-aware search pipelines.  
-- 🧠 **AI infrastructure:** Practicing modular design, indexing, and evaluation in realistic workflows.  
+- 🧠 **AI infrastructure:** Applying modular design, indexing, and evaluation practices to realistic data workflows.  
 
-This project is part of my journey to master **AI system design** — going beyond prototypes to explore how intelligent systems stay compliant and trustworthy.
+This project reflects my goal to master **AI system design** — going beyond prototypes to explore how intelligent systems stay compliant, reliable, and transparent.
 
 ---
 
 ## 🚧 Challenges & Expected Learning Outcomes
 
-Building Lexi-RAG involves multiple interconnected challenges that mirror real enterprise systems:
+Building Lexi-RAG involves several layers of difficulty that reflect real enterprise AI environments.
 
 ### 🔒 Data Security & Role-Based Access
 - Building a **layered database** where each user role unlocks deeper information.  
-- Implementing application-level **Row-Level Security logic** for MongoDB and the vector index.  
-- Guaranteeing **no cross-case data exposure**, even in complex searches.
+- Implementing application-level **Row-Level Security logic** on top of MongoDB and the vector index.  
+- Guaranteeing **no cross-case data exposure**, even in complex retrieval scenarios.
 
 ### 🧬 Encrypted Embeddings
 - Experimenting with **embedding encryption** to prevent semantic data leaks.  
-- Learning techniques for **privacy-preserving retrieval** and secure metadata storage.  
-- Measuring the trade-off between **speed, accuracy, and confidentiality**.
+- Learning methods for **privacy-preserving retrieval** and secure metadata storage.  
+- Measuring trade-offs between **speed, accuracy, and confidentiality**.
+
+### 🧮 Accuracy, Evaluation & Hallucination Control
+- Ensuring that AI-generated answers remain **grounded and verifiable**.  
+- Designing evaluation metrics for **retrieval precision, recall, and factual correctness**.  
+- Including **citations and source snippets** with every answer so humans can confirm the origin of information.  
+- Minimizing hallucination through careful prompt design and context control.
 
 ### 🧠 Retrieval & Context Management
 - Chunking long, semi-structured legal documents for semantic search.  
-- Combining **vector similarity** and **keyword search (BM25)** for robust accuracy.  
-- Returning **traceable results** with clear citations to original documents.
+- Combining **vector similarity** and **keyword search (BM25)** to improve precision on legal language.  
+- Maintaining **traceability** by linking each response to its source pages or documents.
 
 ### 🏗️ System Design & Architecture
-- Coordinating multi-role access logic (lawyer, paralegal, admin, client).  
-- Linking **MongoDB** for document metadata and **Qdrant** for vector embeddings.  
-- Designing an ingestion pipeline that can scale as new data arrives.
+- Coordinating multiple user roles (lawyer, paralegal, admin, client) with clear permissions.  
+- Connecting **MongoDB** (for document metadata) with **Qdrant** (for vector embeddings).  
+- Designing an ingestion pipeline that scales as new documents are added.
 
 ### 📚 Key Learning Goals
-- Master **embedding models**, **vector databases**, and **hybrid retrieval**.  
-- Strengthen **system-design thinking** and **secure data architecture skills**.  
-- Practice evaluating AI systems where **governance and intelligence intersect**.
+- Master **embedding models**, **vector databases**, and **hybrid retrieval pipelines**.  
+- Strengthen **system-design thinking** and **secure data-architecture skills**.  
+- Practice building AI systems where **accuracy, privacy, and explainability** coexist.
 
 ---
 
 ## 🧭 Approach
 
-Lexi-RAG follows a **layered information model**, similar to real legal clearance levels:
+Lexi-RAG follows a **layered information model**, inspired by real legal clearance levels:
 
 | Layer | Access | Example Data |
 |--------|---------|--------------|
@@ -85,10 +91,13 @@ Lexi-RAG follows a **layered information model**, similar to real legal clearanc
 | **3 – Attorney Layer** | Lawyers & Partners | Legal strategy, internal memos |
 | **4 – Core Intelligence** | Partners/System | Encrypted embeddings, analytics |
 
-Each query checks the user’s role, filters by permitted layers, and searches only within authorized data scopes.  
-Higher-sensitivity layers use **encrypted embeddings**, decryptable only by privileged roles.  
+When a user makes a query:
+1. The system checks their role and case permissions.  
+2. Retrieves context only from allowed layers.  
+3. Generates an answer **with citations** linking back to original documents.  
 
-This approach creates a **hierarchy of visibility**, teaching me to design retrieval systems that balance intelligence, performance, and confidentiality.
+The emphasis is on **transparency and trust** — every answer shows its sources, allowing humans to verify facts and reduce hallucination risk.  
+This mirrors how real legal professionals work: AI assists, but humans confirm.
 
 ---
 
@@ -98,19 +107,19 @@ This approach creates a **hierarchy of visibility**, teaching me to design retri
 Define data schemas, user roles, and privacy layers.  
 
 **Phase 2 — Database & Infrastructure Setup**  
-Implement MongoDB for unstructured data and Qdrant for vectors.  
+Implement MongoDB for unstructured data and Qdrant for vector storage.  
 
 **Phase 3 — Retrieval Logic**  
-Build text extraction, chunking, and hybrid search with metadata filtering.  
+Build text extraction, chunking, and hybrid semantic search with metadata filtering.  
 
 **Phase 4 — Encryption Layer**  
-Add client- or server-side encryption for privileged embeddings; benchmark results.  
+Add client- or server-side encryption for privileged embeddings; benchmark performance.  
 
 **Phase 5 — Frontend Demo**  
 Develop a minimal interface with authentication, chat view, and citation display.  
 
 **Phase 6 — Evaluation & Documentation**  
-Measure retrieval accuracy, privacy strength, and overall system performance.
+Measure retrieval accuracy, groundedness, and privacy strength; publish results.
 
 ---
 
