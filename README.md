@@ -1,4 +1,61 @@
 # 🏛️ Lexi-RAG: A Privacy-First Legal Retrieval System
+
+## 📁 Project Structure
+
+```text
+lexi-rag/
+├── backend/
+│   ├── src/
+│   │   ├── core/                   # Shared utilities (Config, DB connections, Logging)
+│   │   │   ├── config.py           # Shared utilities (Config, DB connections, Logging)
+│   │   │   ├── database.py         # Mongo & Qdrant factories
+│   │   │   └── security.py         # Encryption helpers
+│   │   │
+│   │   ├── modules/                # 📍 THE CORE MODULARITY
+│   │   │   ├── auth/               # Domain: Identity & Access
+│   │   │   │   ├── router.py       # Domain: Identity & Access
+│   │   │   │   ├── service.py      # Domain: Identity & Access
+│   │   │   │   └── schemas.py      # Domain: Identity & Access
+│   │   │   ├── ingestion/          # Domain: Parsing, Chunking, Vectors
+│   │   │   │   ├── router.py       # "Upload Document" endpoints
+│   │   │   │   ├── processor.py    # Text extraction & Chunking logic
+│   │   │   │   └── vectorizer.py   # Embedding generation
+│   │   │   ├── retrieval/          # Domain: Search & RAG Generation
+│   │   │   │   ├── router.py       # "Ask Question" endpoints
+│   │   │   │   ├── search.py       # Hybrid Search (Keyword + Vector)
+│   │   │   │   └── generator.py    # LLM Prompt Engineering
+│   │   │   └── documents/          # Domain: CRUD for Metadata/Storage
+│   │   │       ├── router.py       # Domain: CRUD for Metadata/Storage
+│   │   │       └── repository.py   # MongoDB interactions
+│   │   ├── main.py                 # App Entry: Wires modules together
+│   │   └── dependencies.py         # Shared dependency injection
+│   ├── tests/
+│   ├── Dockerfile
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── app/
+│   │   │   └── README.md           # App root
+│   │   ├── components/
+│   │   │   ├── features/
+│   │   │   │   ├── auth/           # Login forms
+│   │   │   │   │   └── README.md   # Login forms
+│   │   │   │   ├── chat/           # Chat bubbles, input areas
+│   │   │   │   │   └── README.md   # Chat bubbles, input areas
+│   │   │   │   └── dashboard/      # Document tables
+│   │   │   │       └── README.md   # Document tables
+│   │   │   └── ui/                 # Generic (Buttons, Inputs)
+│   │   │       └── README.md       # Generic (Buttons, Inputs)
+│   ├── package.json
+│   └── Dockerfile
+├── infrastructure/                 # 📍 Infrastructure as Code
+│   ├── docker-compose.yml          # Compose for Mongo & Qdrant
+│   ├── mongo/                      # Init scripts for Mongo
+│   └── qdrant/                     # Configs for Qdrant
+└── README.md
+```
+
+Each file contains a comment at the top describing its responsibility, as shown above.
 **_AI-powered legal retrieval system built for privacy, precision, and trust._**
 **_Personal Project — In Progress_**
 
