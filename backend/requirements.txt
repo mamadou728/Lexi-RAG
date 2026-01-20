@@ -1,10 +1,25 @@
+# Core API & Server
 fastapi
 uvicorn
 python-dotenv
-pymongo
+
+# Database & Vector Store
+pymongo             # Standard MongoDB driver (Consider 'motor' later for async)
 qdrant-client
+
+# AI & RAG Logic (Your existing stack)
 langchain
 langchain-openai
 langchain-community
-pypdf
-tiktoken
+pypdf               # For parsing legal PDFs
+tiktoken            # For counting tokens
+
+# --- NEW SECURITY LAYERS (Required for Architecture) ---
+
+# Layer 2: The Keymaster (Encryption)
+cryptography        # REQUIRED for Fernet (AES-256) encryption of text
+
+# Layer 4: RBAC & Auth
+passlib[bcrypt]     # REQUIRED to hash user passwords (never store plain text)
+python-jose[cryptography] # REQUIRED to generate JWT tokens for session handling
+python-multipart    # REQUIRED for FastAPI login forms
