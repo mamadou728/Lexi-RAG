@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-dotenv
+pymongo
+qdrant-client
+langchain
+langchain-openai
+langchain-community
+pypdf
+tiktoken
