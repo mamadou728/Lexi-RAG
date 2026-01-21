@@ -5,6 +5,7 @@ from beanie import init_beanie
 from qdrant_client import QdrantClient
 import os
 from .config import MONGO_URI, QDRANT_URL, QDRANT_API_KEY
+import certifi
 # Import the models to register in the module
 
 from ..modules.retrieval.models import Conversation
@@ -19,7 +20,10 @@ async def init_db():
     if not db_client:
         db_client = "DB not found from .env"
    
-    mongo_client = AsyncIOMotorClient(db_client)
+    mongo_client = AsyncIOMotorClient(
+        db_client,
+        tlsCAFile=certifi.where()
+                                      )
     database = mongo_client.lexi_rag_db
     
     # Initialize Beanie with the database and the document models
