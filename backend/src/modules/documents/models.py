@@ -2,7 +2,7 @@ from beanie import Document, Link
 from pydantic import Field
 from enum import Enum
 from datetime import datetime, timezone
-from modules.matters.models import Matter
+from ..matters.models import Matter
 
 class SensitivityLevel(str, Enum):
     PUBLIC = "public"
@@ -22,7 +22,6 @@ class DocumentFile(Document):
     sensitivity: SensitivityLevel = SensitivityLevel.INTERNAL
     
     # This field MUST be encrypted before saving (Layer 2)
-    # We use 'bytes' because the encryption output is binary
     extracted_text: bytes 
     
     # Layer 1: Link to the "Blind Index" in Qdrant

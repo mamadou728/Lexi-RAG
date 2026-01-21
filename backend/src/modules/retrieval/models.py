@@ -3,8 +3,8 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime, timezone
 from enum import Enum
-from modules.matters.models import Matter
-from modules.auth.models import User
+from ..matters.models import Matter
+from ..auth.models import User
 
 class Role(str, Enum):
     USER = "user"
@@ -30,7 +30,6 @@ class Conversation(Document):
     user: Link[User]
     
     # We store messages as a list inside the Conversation document
-    # efficient for reading history
     messages: List[Message] = []
     
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
