@@ -22,8 +22,7 @@ async def init_db():
    
     mongo_client = AsyncIOMotorClient(
         db_client,
-        tls=True,
-        tlsAllowInvalidCertificates=True
+        tlsCAFile=certifi.where()
                                       )
     database = mongo_client.lexi_rag_db
     
