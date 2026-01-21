@@ -174,8 +174,8 @@ The emphasis is on transparency and trust — AI assists, humans verify.
 
 ## 🗺️ Roadmap
 
-**Phase 1 — Design & Modeling**  Done✅
-Define data schemas, user roles, and privacy layers
+**Phase 1 — Design & Modeling**  
+Define data schemas, user roles, and privacy layers (Done✅)
 
 **Phase 2 — Database & Infrastructure Setup**
 Implement MongoDB and Qdrant
