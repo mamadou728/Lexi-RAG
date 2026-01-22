@@ -2,16 +2,16 @@
 from xmlrpc import client
 from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie  
-from qdrant_client import QdrantClient
+from qdrant_client import QdrantClient , models
 import os
 from .config import MONGO_URI, QDRANT_URL, QDRANT_API_KEY
 import certifi
 # Import the models to register in the module
 
-from ..modules.retrieval.models import Conversation
-from ..modules.matters.models import Matter
-from ..modules.auth.models import User
-from ..modules.documents.models import DocumentFile
+from ..models.message.model import Conversation
+from ..models.matters.model import Matter
+from ..models.auth.model import User
+from ..models.documents.model import DocumentFile
 
 async def init_db():
     # Initialize MongoDB Client
@@ -49,17 +49,28 @@ async def init_db():
         )
     
     collection_name = "legal_documents"
-    
+
+    if qdrant_client.collection_exists(collection_name):
+        qdrant_client.delete_collection(collection_name) 
     if not qdrant_client.collection_exists(collection_name):
         print(f"Creating Cloud collection: {collection_name}")
         
         qdrant_client.recreate_collection(
-            collection_name=collection_name,
-            vectors_config={
-                "size": 1536,  # Adjust based on your embedding model
-                "distance": "Cosine"
-            }
+           collection_name=collection_name,
+    vectors_config={
+        "dense_vector": models.VectorParams(
+            size=1024,  # BGE-M3 fixed size
+            distance=models.Distance.COSINE
         )
+    },
+    sparse_vectors_config={
+        "sparse_vector": models.SparseVectorParams(
+            index=models.SparseIndexParams(
+                on_disk=False, # Keep in RAM for speed
+            )
+        )
+    }
+)
         print("✅ Qdrant client initialized and collection is ready!")
     else:
         print(f"Qdrant collection '{collection_name}' already exists.")

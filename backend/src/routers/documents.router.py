@@ -1,9 +1,10 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from bson import ObjectId
+from datetime import datetime, timezone
 
-from services.security import security_service
-from services.ingestion import ingestion_service 
-from models import DocumentFile, SensitivityLevel
+from ..core.security import security_service
+from ..rag.vectorizer import vectorizer 
+from ..models.documents.model import DocumentFile, SensitivityLevel
 
 # Placeholder for your extraction utility
 # from utils.pdf_extractor import extract_text_helper 
@@ -45,7 +46,7 @@ async def upload_document(
     
     # 4. Trigger Ingestion (Qdrant)
     # Pass raw_text to avoid decrypting again in the worker.
-    await ingestion_service.process_document(
+    await vectorizer.process_document(
         doc=doc, 
         raw_text=raw_text
     )
