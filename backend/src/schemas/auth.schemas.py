@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 # 1. Schema for User Registration (Input)
 class UserCreate(BaseModel):
@@ -7,8 +7,9 @@ class UserCreate(BaseModel):
     password: str = Field(..., min_length=8, description="Must be at least 8 characters")
 
     # Optional: basic password strength check
-    @validator('password')
-    def validate_password_strength(cls, v):
+    @field_validator('password')
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
         if not any(char.isdigit() for char in v):
             raise ValueError('Password must contain at least one number')
         return v
