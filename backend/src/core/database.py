@@ -7,11 +7,12 @@ import os
 from .config import MONGO_URI, QDRANT_URL, QDRANT_API_KEY
 import certifi
 # Import the models to register in the module
+# Using absolute imports to handle module names with dots
 
-from ..models.message.model import Conversation
-from ..models.matters.model import Matter
-from ..models.auth.model import User
-from ..models.documents.model import DocumentFile
+from src.models.message.model import Conversation
+from src.models.matters.model import Matter
+from src.models.auth.model import User
+from src.models.documents.model import DocumentFile
 
 async def init_db():
     # Initialize MongoDB Client
@@ -39,9 +40,7 @@ async def init_db():
     
     print("✅ Database initialized! MongoDB and Beanie are connected.")
   
-  
-  
-  
+    
     # Initialize Qdrant Client
     qdrant_client = QdrantClient(
         url=QDRANT_URL, 
@@ -63,13 +62,6 @@ async def init_db():
             distance=models.Distance.COSINE
         )
     },
-    sparse_vectors_config={
-        "sparse_vector": models.SparseVectorParams(
-            index=models.SparseIndexParams(
-                on_disk=False, # Keep in RAM for speed
-            )
-        )
-    }
 )
         print("✅ Qdrant client initialized and collection is ready!")
     else:

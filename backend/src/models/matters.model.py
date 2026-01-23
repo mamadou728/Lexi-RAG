@@ -4,7 +4,7 @@ from enum import Enum
 from typing import List, Optional
 from datetime import datetime, timezone
 # Import the User model to link to it
-from .auth.model import User
+from src.models.auth.model import User
 
 class PracticeArea(str, Enum):
     LITIGATION = "litigation"

@@ -11,10 +11,11 @@ load_dotenv()
 
 # --- CONFIGURATION ---
 EMBEDDING_MODEL = 'BAAI/bge-m3'
-GROQ_API_KEY = os.getenv("LLM_API_KEY")  # Same as config.py uses
-LLM_MODEL = "llama-3.1-8b-instant"  # Currently supported Groq model
+GROQ_API_KEY = os.getenv("LLM_API_KEY") 
+LLM_MODEL = "llama-3.1-8b-instant" 
 
-# 1. CHUNKING (Your Code)
+# 1. CHUNKING 
+# chunk_size=500 chars is roughly 150-200 tokens, so max_length=512 is safe.
 text_splitter = RecursiveCharacterTextSplitter(
     chunk_size=500,
     chunk_overlap=50,
@@ -63,38 +64,54 @@ def load_data():
 def vectorize(chunks):
     print("⏳ Loading Embedder...")
     model = BGEM3FlagModel(EMBEDDING_MODEL, use_fp16=False)
+    
     print("🚀 Vectorizing...")
     texts = [c['text'] for c in chunks]
-    embeddings = model.encode(texts, return_dense=True, return_sparse=False)['dense_vecs']
+    
+    # OPTIMIZATION: Added batch_size and max_length for safety and efficiency
+    embeddings = model.encode(
+        texts, 
+        batch_size=12,      # Process 12 chunks at a time to save RAM
+        max_length=512,     # Cap context to 512 tokens (matches chunk_size)
+        return_dense=True, 
+        return_sparse=False
+    )['dense_vecs']
+    
     for i, chunk in enumerate(chunks):
         chunk['vector'] = embeddings[i]
+        
     return chunks, model
 
 def retrieve(query, chunks, model, top_k=3):
     print(f"\n🔎 Retrieving context for: '{query}'...")
-    query_vec = model.encode([query], return_dense=True, return_sparse=False)['dense_vecs'][0]
+    # Also apply max_length to the query encoding
+    query_vec = model.encode(
+        [query], 
+        max_length=512, 
+        return_dense=True, 
+        return_sparse=False
+    )['dense_vecs'][0]
     
     results = []
     for chunk in chunks:
         doc_vec = chunk['vector']
+        # Cosine Similarity
         score = np.dot(query_vec, doc_vec) / (np.linalg.norm(query_vec) * np.linalg.norm(doc_vec))
         results.append((score, chunk))
     
     results.sort(key=lambda x: x[0], reverse=True)
     return [item for score, item in results[:top_k]]
 
-# --- PART 2: THE GENERATOR (New Magic) ---
+# --- PART 2: THE GENERATOR ---
 def generate_answer(query, context_chunks):
     client = Groq(api_key=GROQ_API_KEY)
     
     # 1. Construct the "Lawyer Context"
-    # We stitch the chunks together into a single block of text
     context_text = ""
     for i, chunk in enumerate(context_chunks):
         context_text += f"\n--- SOURCE {i+1} ({chunk['filename']}) ---\n{chunk['text']}\n"
 
     # 2. The Prompt Engineering
-    # We tell the AI exactly how to behave
     system_prompt = """You are Lexi, an elite legal AI assistant. 
     Answer the user's question explicitly based on the provided Context.
     
@@ -119,7 +136,7 @@ def generate_answer(query, context_chunks):
             {"role": "user", "content": user_message}
         ],
         model=LLM_MODEL,
-        temperature=0.1, # Keep it strictly factual
+        temperature=0.1, 
     )
 
     return chat_completion.choices[0].message.content
@@ -135,10 +152,10 @@ if __name__ == "__main__":
         print("\n" + "="*50)
         user_query = "How much is the retention bonus and who gets it?"
         
-        # A. Retrieve (The 'R')
+        # A. Retrieve
         top_hits = retrieve(user_query, vectorized_chunks, model)
         
-        # B. Generate (The 'G')
+        # B. Generate
         final_answer = generate_answer(user_query, top_hits)
         
         print(f"\n📝 LEXI'S ANSWER:\n{final_answer}")

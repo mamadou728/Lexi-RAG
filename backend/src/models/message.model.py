@@ -3,8 +3,8 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime, timezone
 from enum import Enum
-from .matters.model import Matter
-from .auth.model import User
+from src.models.matters.model import Matter
+from src.models.auth.model import User
 
 class Role(str, Enum):
     USER = "user"
