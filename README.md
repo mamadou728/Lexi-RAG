@@ -181,7 +181,7 @@ Define data schemas, user roles, and privacy layers (Done✅)
 Implement MongoDB and Qdrant (Done✅)
 
 **Phase 3 — Retrieval Logic**
-Build text extraction, chunking, and hybrid semantic search
+Build text extraction, chunking, and hybrid semantic search (Done✅)
 
 **Phase 4 — Encryption Layer**
 Add encryption for privileged embeddings and benchmark performance
