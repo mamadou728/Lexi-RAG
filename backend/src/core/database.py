@@ -4,27 +4,23 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie  
 from qdrant_client import QdrantClient , models
 import os
+import ssl
 from .config import MONGO_URI, QDRANT_URL, QDRANT_API_KEY
 import certifi
 # Import the models to register in the module
 # Using absolute imports to handle module names with dots
 
-from src.models.message.model import Conversation
-from src.models.matters.model import Matter
-from src.models.auth.model import User
-from src.models.documents.model import DocumentFile
+from models.message import Conversation
+from models.matters import Matter
+from models.auth import User
+from models.documents import DocumentFile
 
 async def init_db():
     # Initialize MongoDB Client
-
-    db_client = MONGO_URI
-    if not db_client:
-        db_client = "DB not found from .env"
-   
     mongo_client = AsyncIOMotorClient(
-        db_client,
+        MONGO_URI,
         tlsCAFile=certifi.where()
-                                      )
+    )
     database = mongo_client.lexi_rag_db
     
     # Initialize Beanie with the database and the document models
@@ -35,8 +31,8 @@ async def init_db():
             Matter, 
             DocumentFile, 
             Conversation
-            ]
-         )
+        ]
+    )
     
     print("✅ Database initialized! MongoDB and Beanie are connected.")
   
@@ -58,7 +54,7 @@ async def init_db():
            collection_name=collection_name,
     vectors_config={
         "dense_vector": models.VectorParams(
-            size=1024,  # BGE-M3 fixed size
+            size=1024,  
             distance=models.Distance.COSINE
         )
     },

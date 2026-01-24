@@ -5,7 +5,10 @@ python-dotenv
 
 # Database & Vector Store
 pymongo             # Standard MongoDB driver (Consider 'motor' later for async)
+motor               # Async MongoDB driver
+beanie              # ODM for MongoDB with Motor
 qdrant-client
+certifi             # SSL certificate bundle
 
 # AI & RAG Logic (Your existing stack)
 langchain
@@ -23,3 +26,4 @@ cryptography        # REQUIRED for Fernet (AES-256) encryption of text
 passlib[bcrypt]     # REQUIRED to hash user passwords (never store plain text)
 python-jose[cryptography] # REQUIRED to generate JWT tokens for session handling
 python-multipart    # REQUIRED for FastAPI login forms
+email-validator      # REQUIRED for Pydantic EmailStr validation

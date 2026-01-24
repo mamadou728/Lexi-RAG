@@ -1,162 +1,194 @@
-import json
 import os
+import uuid
 import numpy as np
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from FlagEmbedding import BGEM3FlagModel
-from groq import Groq
+from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 
-# Load environment variables
+# Clients & Models
+from qdrant_client import QdrantClient, models
+from qdrant_client.models import PointStruct, Filter, FieldCondition, MatchAny
+from FlagEmbedding import BGEM3FlagModel
+from groq import Groq
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+# Import your data models
+from models.auth import SystemRole
+
+# --- 1. CENTRALIZED CONFIGURATION ---
 load_dotenv()
 
-# --- CONFIGURATION ---
-EMBEDDING_MODEL = 'BAAI/bge-m3'
-GROQ_API_KEY = os.getenv("LLM_API_KEY") 
-LLM_MODEL = "llama-3.1-8b-instant" 
+QDRANT_URL = os.getenv("QDRANT_URL")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+GROQ_API_KEY = os.getenv("LLM_API_KEY")
+COLLECTION_NAME = "legal_documents"
 
-# 1. CHUNKING 
-# chunk_size=500 chars is roughly 150-200 tokens, so max_length=512 is safe.
-text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size=500,
-    chunk_overlap=50,
-)
+# Initialize Clients ONCE (Global Singleton Pattern)
+print("⏳ Initializing Global AI Engine...")
 
-def load_data():
-    try:
-        # Load the raw seed data
-        with open("documents_mock.json", "r", encoding="utf-8") as f: 
-            data = json.load(f)
-    except Exception as e:
-        print(f"❌ Error loading file: {e}")
-        return []
+# A. The Brain (Qdrant)
+qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
-    # Handle List vs Dict structure
-    if isinstance(data, list):
-        raw_documents = data
-    elif isinstance(data, dict):
-        raw_documents = data.get("documents", [])
-    else:
-        return []
-        
-    print(f"📂 Loaded {len(raw_documents)} raw documents.")
-    all_chunks = []
-    
-    for doc in raw_documents:
-        source_text = doc.get("content_text", "")
-        if not source_text: continue
+# B. The Translator (BGE-M3 Model)
+# We load this once to avoid reloading 2GB weights on every request
+embedding_model = BGEM3FlagModel('BAAI/bge-m3', use_fp16=False)
 
-        text_fragments = text_splitter.split_text(source_text)
+# C. The Generator (LLM)
+groq_client = Groq(api_key=GROQ_API_KEY)
 
-        for i, fragment in enumerate(text_fragments):
-            chunk_object = {
-                "chunk_index": i,
-                "text": fragment,
-                "original_doc_id": doc.get("_id"),
-                "filename": doc.get("filename"),
-                "matter_id": doc.get("matter_id"),
-                "sensitivity": doc.get("sensitivity")
-            }
-            all_chunks.append(chunk_object)
-            
-    print(f"✅ Chunking Complete: {len(all_chunks)} chunks created.")
-    return all_chunks
+# D. The Text Splitter
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
 
-def vectorize(chunks):
-    print("⏳ Loading Embedder...")
-    model = BGEM3FlagModel(EMBEDDING_MODEL, use_fp16=False)
-    
-    print("🚀 Vectorizing...")
-    texts = [c['text'] for c in chunks]
-    
-    # OPTIMIZATION: Added batch_size and max_length for safety and efficiency
-    embeddings = model.encode(
-        texts, 
-        batch_size=12,      # Process 12 chunks at a time to save RAM
-        max_length=512,     # Cap context to 512 tokens (matches chunk_size)
-        return_dense=True, 
-        return_sparse=False
-    )['dense_vecs']
-    
-    for i, chunk in enumerate(chunks):
-        chunk['vector'] = embeddings[i]
-        
-    return chunks, model
+print("✅ AI Engine Ready.")
 
-def retrieve(query, chunks, model, top_k=3):
-    print(f"\n🔎 Retrieving context for: '{query}'...")
-    # Also apply max_length to the query encoding
-    query_vec = model.encode(
-        [query], 
-        max_length=512, 
-        return_dense=True, 
-        return_sparse=False
-    )['dense_vecs'][0]
-    
-    results = []
-    for chunk in chunks:
-        doc_vec = chunk['vector']
-        # Cosine Similarity
-        score = np.dot(query_vec, doc_vec) / (np.linalg.norm(query_vec) * np.linalg.norm(doc_vec))
-        results.append((score, chunk))
-    
-    results.sort(key=lambda x: x[0], reverse=True)
-    return [item for score, item in results[:top_k]]
+# --- 2. PERMISSIONS LOGIC ---
+# Define who can see what. Centralized here for easy changes.
+PERMISSION_MATRIX = {
+    SystemRole.PARTNER:   ["public", "internal", "privileged", "discovery"],
+    SystemRole.ASSOCIATE: ["public", "internal", "privileged", "discovery"],
+    SystemRole.STAFF:     ["public", "internal"], 
+    SystemRole.CLIENT:    ["public"]              
+}
 
-# --- PART 2: THE GENERATOR ---
-def generate_answer(query, context_chunks):
-    client = Groq(api_key=GROQ_API_KEY)
-    
-    # 1. Construct the "Lawyer Context"
-    context_text = ""
-    for i, chunk in enumerate(context_chunks):
-        context_text += f"\n--- SOURCE {i+1} ({chunk['filename']}) ---\n{chunk['text']}\n"
+def get_allowed_sensitivities(role: SystemRole) -> List[str]:
+    return PERMISSION_MATRIX.get(role, [])
 
-    # 2. The Prompt Engineering
-    system_prompt = """You are Lexi, an elite legal AI assistant. 
-    Answer the user's question explicitly based on the provided Context.
-    
-    Rules:
-    1. Cite your sources (e.g., "According to the Merger Agreement...").
-    2. If the answer is not in the context, say "I cannot find that information in the documents."
-    3. Be precise with numbers and dates."""
+# --- 3. CORE FUNCTIONS ---
 
-    user_message = f"""
-    Context Documents:
-    {context_text}
-
-    User Question: {query}
+def vectorize_and_upload(content_text: str, metadata: Dict[str, Any]):
     """
+    Chunks text -> Creates Vectors -> Uploads to Qdrant.
+    """
+    if not content_text:
+        return
 
-    print("🤖 Generating answer via Groq (Llama 3)...")
+    # A. Chunking
+    chunks = text_splitter.split_text(content_text)
     
-    # 3. The API Call
-    chat_completion = client.chat.completions.create(
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message}
-        ],
-        model=LLM_MODEL,
-        temperature=0.1, 
+    # B. Vectorization (Batch)
+    embeddings = embedding_model.encode(
+        chunks, batch_size=12, max_length=512, return_dense=True
+    )['dense_vecs']
+
+    # C. Prepare Points
+    points = []
+    for i, (text, vector) in enumerate(zip(chunks, embeddings)):
+        
+        # Combine global metadata with chunk metadata
+        payload = metadata.copy()
+        payload.update({
+            "chunk_index": i,
+            "text_snippet": text 
+        })
+
+        points.append(PointStruct(
+            id=str(uuid.uuid4()),
+            vector=vector.tolist(),
+            payload=payload
+        ))
+
+    # D. Upload
+    if points:
+        qdrant_client.upsert(collection_name=COLLECTION_NAME, points=points)
+        print(f"✅ Indexed {len(points)} chunks for {metadata.get('filename')}")
+
+
+def vectorize(
+    content_text: str,
+    metadata: Dict[str, Any],
+    qdrant_client: Optional[QdrantClient] = None,
+) -> None:
+    """
+    Wrapper for vectorize_and_upload. Uses global qdrant_client if none passed.
+    """
+    vectorize_and_upload(content_text, metadata)
+
+
+def retrieve_safe_documents(query: str, user_role: SystemRole, top_k: int = 3) -> List[Dict]:
+    """
+    Searches Qdrant with a STRICT security filter based on User Role.
+    """
+    
+
+    # A. Get Permissions
+    allowed_levels = get_allowed_sensitivities(user_role)
+    if not allowed_levels:
+        print("⛔ Access Denied.")
+        return []
+
+    # B. Build Security Filter
+    # "Only return docs where 'sensitivity' is inside the allowed_levels list"
+    security_filter = Filter(
+        must=[
+            FieldCondition(
+                key="sensitivity", 
+                match=MatchAny(any=allowed_levels)
+            )
+        ]
     )
 
-    return chat_completion.choices[0].message.content
+    # C. Search
+    query_vector = embedding_model.encode(query, return_dense=True)['dense_vecs']
+    
+    hits = qdrant_client.search(
+        collection_name=COLLECTION_NAME,
+        query_vector=query_vector,
+        query_filter=security_filter,
+        limit=top_k
+    )
 
-# --- MAIN EXECUTION ---
+    # D. Clean Results
+    return [
+        {
+            "filename": hit.payload.get("filename"),
+            "sensitivity": hit.payload.get("sensitivity"),
+            "text": hit.payload.get("text_snippet"),
+            "score": hit.score
+        }
+        for hit in hits
+    ]
+
+
+def generate_legal_answer(query: str, context_docs: List[Dict]) -> str:
+    """
+    Generates an answer using Groq (Llama 3) based on retrieved docs.
+    """
+    if not context_docs:
+        return "I cannot find any information relevant to your access level."
+
+    # Format Context
+    context_str = "\n".join([
+        f"SOURCE: {d['filename']} ({d['sensitivity']})\nTEXT: {d['text']}\n"
+        for d in context_docs
+    ])
+
+    # Prompt
+    system_prompt = (
+        "You are Lexi, a legal AI. Answer strictly using the provided context. "
+        "Cite the Source filename for every fact."
+    )
+
+    try:
+        response = groq_client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Context:\n{context_str}\n\nQuestion: {query}"}
+            ],
+            model="llama-3.1-8b-instant",
+            temperature=0.1
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"Error generating answer: {e}"
+
+# --- 4. OPTIONAL: TEST RUNNER ---
 if __name__ == "__main__":
-    # 1. Setup
-    chunks = load_data()
-    if chunks:
-        vectorized_chunks, model = vectorize(chunks)
-        
-        # 2. Run the Full Loop
-        print("\n" + "="*50)
-        user_query = "How much is the retention bonus and who gets it?"
-        
-        # A. Retrieve
-        top_hits = retrieve(user_query, vectorized_chunks, model)
-        
-        # B. Generate
-        final_answer = generate_answer(user_query, top_hits)
-        
-        print(f"\n📝 LEXI'S ANSWER:\n{final_answer}")
-        print("="*50)
+    # Test as a Staff member (Should NOT see Privileged docs)
+    test_role = SystemRole.STAFF 
+    query = "What is the retention bonus?"
+
+    docs = retrieve_safe_documents(query, test_role)
+    answer = generate_legal_answer(query, docs)
+
+    print(f"\n📝 Question: {query}")
+    print(f"👤 Role: {test_role.value}")
+    print(f"🤖 Answer: {answer}")

@@ -1,48 +1,40 @@
-from turtle import title
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
-from src.core.database import init_db
-# from qdrant_client import QdrantClient
-# from core.config import QDRANT_URL, QDRANT_API_KEY
+from core.database import init_db
+from routers import auth_router, documents_router, rag_router 
 
-
-
- # qdrant_client: QdrantClient = None
-# Lifespan manager for FastAPI application
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Initialize the database connections
-    mongo_client = await init_db()
+    """
+    Lifespan Manager:
+    Runs BEFORE the app starts (to connect DBs)
+    and AFTER the app stops (to close connections).
+    """
     
-    # Yield control back to FastAPI application
+    # 1. Initialize MongoDB & Beanie
+    # This connects to Mongo and sets up your User/Document/Matter models
+    mongo_client, qdrant_client = await init_db()
+    
+    # Yield control -> The Application runs now
     yield
     
-    # Cleanup actions can be performed here if necessary
+    # 2. Cleanup (When you press Ctrl+C)
     mongo_client.close()
-    print("✅ Database connections closed.")
+    print("✅ Database connections closed. Application shutdown complete.")
 
+# Create the App
+app = FastAPI(
+    title="Lexi-RAG API",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
+# Register the Routers
+app.include_router(auth_router.router)       # /auth/login
+app.include_router(documents_router.router)  # /documents/upload
+app.include_router(rag_router.router)        # /search/query
 
-    # global qdrant_client
-    # qdrant_client = QdrantClient(
-    #     url=QDRANT_URL, 
-    #     api_key=QDRANT_API_KEY
-    # )
-    # try:
-    #     qdrant_client.get_collections()
-    #     print("✅ Qdrant connected successfully.")
-    # except Exception as e:
-    #     print(f"❌ Failed to connect to Qdrant: {e}")
-
-    yield # Application runs here
-
-    print("✅ Application shutdown complete.")
-    # if qdrant_client:
-    #     qdrant_client.close()
-    #     print("✅ Qdrant connection closed.")   
-
-app = FastAPI(title="Lexi-rag", lifespan=lifespan)
-
-# def get_qdrant():
-#     return qdrant_client
+@app.get("/")
+async def root():
+    return {"status": "online", "message": "Lexi AI is ready to help! 🟢"}

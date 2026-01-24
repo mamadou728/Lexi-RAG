@@ -1,8 +1,7 @@
-from beanie import Document, Link
-from pydantic import Field
+from beanie import Document, Link, PydanticObjectId
+from pydantic import Field, ConfigDict
 from enum import Enum
 from datetime import datetime, timezone
-from bson import ObjectId
 
 class SensitivityLevel(str, Enum):
     PUBLIC = "public"
@@ -15,11 +14,13 @@ class DocumentFile(Document):
     THE VAULT (Text Only)
     No PDFs. No S3. Just the secure text.
     """
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    
     # This acts as the "Title" of the document
     filename: str 
     
     # Relationships
-    matter_id: ObjectId 
+    matter_id: PydanticObjectId 
     
     # SECURITY
     sensitivity: SensitivityLevel = SensitivityLevel.INTERNAL

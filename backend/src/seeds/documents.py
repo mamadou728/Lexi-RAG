@@ -1,0 +1,259 @@
+import asyncio
+import os
+import sys
+from pathlib import Path
+from datetime import datetime, timezone
+import httpx
+from motor.motor_asyncio import AsyncIOMotorClient
+from beanie import init_beanie
+from passlib.context import CryptContext
+import certifi
+
+# Add the src directory to Python path so imports work
+# This allows running the script from the seeds directory
+src_path = Path(__file__).parent.parent
+if str(src_path) not in sys.path:
+    sys.path.insert(0, str(src_path))
+
+# --- IMPORTS ---
+from core.config import MONGO_URI
+from models.auth import User, SystemRole, AccountStatus
+from models.matters import Matter, PracticeArea
+from models.documents import DocumentFile, SensitivityLevel
+from models.message import Conversation 
+from core.encryption import AES256Service
+
+# ---------------- CONFIG ----------------
+# 1. Setup Password Hasher
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+BACKEND_URL = "http://localhost:8000"  # Adjust to your running server
+API_BASE = f"{BACKEND_URL}/api/v1"
+COMMON_PASSWORD = "password123"
+
+# Hash password lazily to avoid bcrypt initialization issues
+def get_common_hash():
+    """Get the hashed password, creating it on first call."""
+    if not hasattr(get_common_hash, '_cached_hash'):
+        try:
+            get_common_hash._cached_hash = pwd_context.hash(COMMON_PASSWORD)
+        except (ValueError, AttributeError) as e:
+            print(f"⚠️  Bcrypt error: {e}")
+            print("💡 Try upgrading packages: pip install --upgrade passlib[bcrypt] bcrypt")
+            raise
+    return get_common_hash._cached_hash
+
+
+# ---------------- 1. USER DATA ----------------
+USERS_DATA = [
+    {
+        "key": "partner_bob",
+        "email": "bob.vance@lawfirm.com",
+        "full_name": "Bob Vance",
+        "system_role": SystemRole.PARTNER,
+        "account_status": AccountStatus.ACTIVE
+    },
+    {
+        "key": "associate_jane",
+        "email": "jane.doe@lawfirm.com",
+        "full_name": "Jane Doe",
+        "system_role": SystemRole.ASSOCIATE,
+        "account_status": AccountStatus.ACTIVE
+    },
+    {
+        "key": "staff_pam",
+        "email": "pam.beesly@lawfirm.com",
+        "full_name": "Pam Beesly",
+        "system_role": SystemRole.STAFF,
+        "account_status": AccountStatus.ACTIVE
+    },
+    {
+        "key": "client_techcorp",
+        "email": "admin@techcorp.com",
+        "full_name": "TechCorp Admin",
+        "system_role": SystemRole.CLIENT,
+        "account_status": AccountStatus.ACTIVE
+    },
+    {
+        "key": "client_omni",
+        "email": "leases@omni-realestate.com",
+        "full_name": "Omni Real Estate Rep",
+        "system_role": SystemRole.CLIENT,
+        "account_status": AccountStatus.ACTIVE
+    }
+]
+
+# ---------------- 2. MATTER DATA ----------------
+MATTER_MAP = {
+    "matter_merger_01": {
+        "title": "TechCorp v. AI_Startup Merger",
+        "practice_area": PracticeArea.CORPORATE,
+        "description": "Acquisition of AI_Startup LLC by TechCorp Inc.",
+        "client_key": "client_techcorp",
+        "team_keys": ["partner_bob", "associate_jane"]
+    },
+    "matter_ip_02": {
+        "title": "TechCorp v. CopyCat Inc.",
+        "practice_area": PracticeArea.LITIGATION,
+        "description": "IP Infringement case regarding 'Fast-Retriever' software.",
+        "client_key": "client_techcorp",
+        "team_keys": ["partner_bob", "associate_jane"]
+    },
+    "matter_estate_03": {
+        "title": "Millennium Tower Lease",
+        "practice_area": PracticeArea.REAL_ESTATE,
+        "description": "Commercial lease agreement for new HQ floors 30-35.",
+        "client_key": "client_omni",
+        "team_keys": ["partner_bob", "staff_pam"]
+    }
+}
+
+# ---------------- 3. DOCUMENT DATA ----------------
+RAW_DOCS =[
+  {
+    "_id": "doc_01",
+    "filename": "Merger_Agreement_Exec_Summary.txt",
+    "matter_id": "matter_merger_01",
+    "sensitivity": "privileged",
+    "content_text": "MERGER AGREEMENT\n\nTHIS AGREEMENT is made and entered into as of January 15, 2026, by and between TechCorp Inc., a Delaware corporation ('Acquirer'), and AI_Startup LLC, a California limited liability company ('Target').\n\nRECITALS\n\nA. The Boards of Directors of both Acquirer and Target have determined that it is in the best interests of their respective companies and shareholders to combine their businesses through a merger of Target with and into a wholly-owned subsidiary of Acquirer.\n\nB. Pursuant to this Agreement, Acquirer shall purchase 100% of the outstanding equity interests of Target for a total purchase price of Fifty Million Dollars ($50,000,000.00), payable consisting of 60% in cash and 40% in Class A Common Stock of Acquirer.\n\nARTICLE I: THE MERGER\n\n1.1 Effective Time. The Merger shall become effective upon the filing of the Certificate of Merger with the Secretary of State of the State of Delaware (the 'Effective Time').\n1.2 Effect of Merger. At the Effective Time, the separate corporate existence of Target shall cease, and the Surviving Corporation shall succeed to all the rights, privileges, immunities, and franchises, and be subject to all the duties and liabilities of Target in accordance with the Delaware General Corporation Law."
+  },
+  {
+    "_id": "doc_02",
+    "filename": "Due_Diligence_Technical_Risk.txt",
+    "matter_id": "matter_merger_01",
+    "sensitivity": "internal",
+    "content_text": "CONFIDENTIAL MEMORANDUM\nTO: Senior Partners, Mergers & Acquisitions Team\nFROM: Technical Audit Committee\nSUBJECT: Technical Due Diligence of AI_Startup Infrastructure\n\nWe have completed our review of the source code and infrastructure repositories maintained by AI_Startup. While the core 'Neural-X' engine shows impressive latency benchmarks (sub-50ms inference times), we have identified three critical risks:\n\n1. Dependency Licensing: The core recommendation engine relies on the 'OpenMath-Z' library, which is licensed under GPL v3. This 'copyleft' license could theoretically force TechCorp to open-source its proprietary platform if the integration is not strictly sandboxed.\n\n2. Server Costs: The current AWS bill is averaging $45,000/month, which is 30% higher than their reported burn rate. They have substantial technical debt in unoptimized GPU instances (p3.8xlarge) that are running idle 40% of the time.\n\n3. Data Privacy: We found hardcoded API keys for their Stripe integration in the git history from 2023. Although these keys have since been rotated, it indicates a historic lack of security hygiene."
+  },
+  {
+    "_id": "doc_03",
+    "filename": "Board_Meeting_Minutes_Jan12.txt",
+    "matter_id": "matter_merger_01",
+    "sensitivity": "privileged",
+    "content_text": "MINUTES OF A SPECIAL MEETING OF THE BOARD OF DIRECTORS OF TECHCORP INC.\n\nHeld via Video Conference\nJanuary 12, 2026, at 2:00 PM EST\n\nPRESENT: John Doe (CEO), Jane Smith (CFO), Robert White (Chairman), and Counsel Jane Specter.\n\nThe Chairman called the meeting to order. The primary agenda item was the proposed acquisition of AI_Startup LLC.\n\nDiscussion:\nThe CEO presented the strategic rationale, noting that acquiring AI_Startup would accelerate TechCorp's roadmap in Generative AI by approximately 18 months. The CFO presented the financial impact analysis, noting that while the acquisition would be dilutive to earnings per share for Q1 and Q2, it is projected to be accretive by Q4 2026.\n\nCounsel Specter raised concerns regarding the ongoing litigation involving AI_Startup's former co-founder, who claims ownership of the initial IP. It was agreed that a specific indemnification clause must be added to the final Merger Agreement to protect TechCorp from this specific liability.\n\nResolution:\nUpon motion duly made and seconded, the Board voted 5-1 to authorize the CEO to proceed with the Term Sheet, subject to the inclusion of the IP indemnification clause."
+  },
+  {
+    "_id": "doc_04",
+    "filename": "Complaint_SDNY_Stamped.txt",
+    "matter_id": "matter_ip_02",
+    "sensitivity": "public",
+    "content_text": "UNITED STATES DISTRICT COURT\nSOUTHERN DISTRICT OF NEW YORK\n\nTECHCORP INC.,\nPlaintiff,\n\nv.\n\nCOPYCAT INC.,\nDefendant.\n\nCase No. 1:26-cv-00492\n\nCOMPLAINT FOR PATENT INFRINGEMENT AND TRADE SECRET MISAPPROPRIATION\n\nPlaintiff TechCorp Inc., by and through its attorneys, alleges as follows:\n\nNATURE OF THE ACTION\n1. This is an action for patent infringement under the patent laws of the United States, 35 U.S.C. § 1, et seq., and for misappropriation of trade secrets under the Defend Trade Secrets Act.\n\n2. Plaintiff is the owner of U.S. Patent No. 9,888,777 (the '777 Patent') titled 'Method for Optimized Vector Retrieval in Low-Latency Environments.'\n\n3. On or about July 12, 2025, Defendant CopyCat Inc. released a software product named 'Fast-Retriever.' Reverse engineering of this product reveals that it utilizes the exact unique hashing algorithm protected by Claim 4 of the '777 Patent.\n\n4. Furthermore, Plaintiff has reason to believe that a former employee of TechCorp, who was hired by Defendant in May 2025, downloaded proprietary source code regarding this algorithm prior to their departure, constituting theft of trade secrets."
+  },
+  {
+    "_id": "doc_05",
+    "filename": "Exhibit_A_Email_Chain.txt",
+    "matter_id": "matter_ip_02",
+    "sensitivity": "discovery",
+    "content_text": "EXHIBIT A - CONFIDENTIAL\n\nFrom: Sarah Jenkins (CTO, CopyCat Inc.) <sjenkins@copycat.com>\nTo: Mark Davis (CEO, CopyCat Inc.) <mdavis@copycat.com>\nDate: June 14, 2025\nSubject: RE: Development Speed\n\nMark,\n\nI understand the pressure to launch 'Fast-Retriever' before Q3, but the engineering team is telling me we are hitting a wall with the latency requirements. We are currently averaging 200ms, and the market standard set by TechCorp is 50ms.\n\nRegarding your suggestion to 'look at how TechCorp did it'—I need to be very clear. We cannot decompile their binary. However, our new hire, Greg, mentioned he remembers the logic for the hashing function from his time there. \n\nIf we use his memory of the logic, we might be in a gray area. He says he didn't bring code, but he can 'recreate' the math. Do I have your go-ahead to let him rewrite the core module?\n\n- Sarah"
+  },
+  {
+    "_id": "doc_06",
+    "filename": "Expert_Witness_Analysis.txt",
+    "matter_id": "matter_ip_02",
+    "sensitivity": "internal",
+    "content_text": "PRIVILEGED AND CONFIDENTIAL\nATTORNEY WORK PRODUCT\n\nPRELIMINARY ANALYSIS OF DEFENDANT'S SOURCE CODE\nPrepared by: Dr. Alan Turing II, Forensic Code Expert\n\nI have performed a diff analysis between TechCorp's 'VectorHash.cpp' (Plaintiff's Exhibit 4) and CopyCat's 'FastCore.cpp' (obtained during Discovery).\n\nFindings:\n1. Structural Similarity: The control flow graph (CFG) of the two functions is 94% identical. The variable names have been changed (e.g., 'index_pointer' was renamed to 'ptr_idx'), but the logic flow is preserved exactly.\n\n2. The 'Smoking Gun': In TechCorp's code, there is a specific comment on line 402: '// Do not touch this magic number 0x5F3759DF'. In CopyCat's code, on line 310, the exact same constant is used. This constant is specific to the Fast Inverse Square Root approximation and, while known in the industry, the surrounding comments in CopyCat's code include a typo ('approximtion') that matches a typo found in an older version of TechCorp's internal documentation.\n\nConclusion:\nIt is highly improbable that CopyCat developed this module independently."
+  },
+  {
+    "_id": "doc_07",
+    "filename": "Commercial_Lease_Tower.txt",
+    "matter_id": "matter_estate_03",
+    "sensitivity": "internal",
+    "content_text": "COMMERCIAL LEASE AGREEMENT\n\nLANDLORD: Omni Real Estate Holdings, LP\nTENANT: TechCorp Inc.\nPREMISES: Floors 30 through 35, The Millennium Tower, 100 Main St.\n\nARTICLE 3: RENT AND EXPENSES\n3.1 Base Rent. Commencing on the Commencement Date, Tenant shall pay to Landlord Base Rent in the amount of Five Hundred Thousand Dollars ($500,000.00) per month. Base Rent shall increase annually by three percent (3%) over the previous year's Base Rent.\n\n3.2 Operating Expenses. In addition to Base Rent, Tenant shall pay its pro rata share (calculated at 12.5% of the total building leasable area) of all Operating Expenses, including but not limited to: property taxes, insurance, common area maintenance, security services, and HVAC repairs.\n\nARTICLE 8: ALTERATIONS\n8.1 Tenant shall not make any structural alterations to the Premises without Landlord's prior written consent. Non-structural alterations (e.g., internal partitions, cabling) exceeding $50,000 in cost also require prior consent."
+  },
+  {
+    "_id": "doc_08",
+    "filename": "Hazardous_Materials_Addendum.txt",
+    "matter_id": "matter_estate_03",
+    "sensitivity": "public",
+    "content_text": "ADDENDUM TO LEASE: HAZARDOUS MATERIALS DISCLOSURE\n\nThis Addendum is incorporated into the Lease Agreement dated January 24, 2026.\n\n1. Asbestos Disclosure. The Building was constructed in 1975. Tenant is hereby notified that Asbestos-Containing Materials (ACM) have been identified in the thermal system insulation in the mechanical rooms on the B1 and B2 levels. These areas are restricted to authorized maintenance personnel.\n\n2. Tenant Restrictions. Tenant shall not bring, use, or dispose of any Hazardous Materials on the Premises, with the exception of standard office supplies (e.g., printer toner, cleaning solvents) used in the ordinary course of business.\n\n3. Indemnification. Tenant agrees to indemnify, defend, and hold Landlord harmless from any claims, judgments, damages, penalties, fines, costs, liabilities, or losses arising during or after the Lease Term resulting from the presence of Hazardous Materials released by Tenant or Tenant's employees."
+  },
+  {
+    "_id": "doc_09",
+    "filename": "Settlement_Offer_Letter.txt",
+    "matter_id": "matter_ip_02",
+    "sensitivity": "privileged",
+    "content_text": "WITHOUT PREJUDICE\n\nJanuary 28, 2026\n\nVIA EMAIL\nCounsel for CopyCat Inc.\n\nRe: TechCorp v. CopyCat Inc. - Settlement Proposal\n\nDear Counsel,\n\nIn light of the recent discovery production, specifically the email correspondence dated June 14, 2025 (Exhibit A), the strength of our client's position regarding the misappropriation of trade secrets is undeniable. \n\nTechCorp prefers to resolve this matter amicably to avoid prolonged litigation costs. We are prepared to dismiss the lawsuit with prejudice subject to the following terms:\n\n1. Monetary Damages: CopyCat Inc. shall pay TechCorp a lump sum of $2,000,000.\n2. Permanent Injunction: CopyCat Inc. shall immediately cease distribution of the 'Fast-Retriever' product and recall all existing licenses.\n3. Audit Rights: CopyCat shall allow a third-party auditor to inspect their codebases annually for the next three years to ensure no TechCorp IP is being utilized.\n\nThis offer remains open until 5:00 PM EST on February 5, 2026."
+  },
+  {
+    "_id": "doc_10",
+    "filename": "CEO_Employment_Agreement.txt",
+    "matter_id": "matter_merger_01",
+    "sensitivity": "privileged",
+    "content_text": "EXECUTIVE EMPLOYMENT AGREEMENT\n\nThis Employment Agreement is entered into between TechCorp Inc. ('Company') and David Founder ('Executive'), the former CEO of AI_Startup.\n\n1. Position and Duties. Following the acquisition, Executive shall serve as 'VP of AI Strategy' for the Company. Executive shall report directly to the Chief Technology Officer.\n\n2. Compensation.\n(a) Base Salary: $350,000 per annum.\n(b) Retention Bonus: Executive shall be eligible for a retention bonus of $500,000, payable upon the second anniversary of the Effective Time, provided Executive is still employed by the Company.\n\n3. Non-Competition. During the Employment Term and for a period of twenty-four (24) months thereafter, Executive shall not, directly or indirectly, engage in, consult for, or own any interest in any business that competes with the Company's core business of Generative AI infrastructure.\n\n4. Intellectual Property. Executive acknowledges that all inventions, designs, and code created during the scope of employment are 'works made for hire' and are the sole property of the Company."
+  }
+]
+async def seed_db():
+    """PHASE 1: Wipes DB and seeds Users & Matters directly."""
+    print("🚀 PHASE 1: Seeding DB...")
+    
+    # Connect & Init
+    client = AsyncIOMotorClient(MONGO_URI)
+    await init_beanie(database=client.lexirag_db, document_models=[User, Matter, DocumentFile])
+
+    # Wipe
+    await User.delete_all()
+    await Matter.delete_all()
+    await DocumentFile.delete_all()
+
+    # Create Users
+    user_map = {}
+    common_hash = get_common_hash()
+    for u in USERS_DATA:
+        user = User(**u, password_hash=common_hash) # Unpacking dict
+        await user.insert()
+        user_map[u["key"]] = user
+
+    # Create Matters
+    matter_id_map = {}
+    for k, m in MATTER_MAP.items():
+        client = user_map.get(m["client_key"])
+        team = [user_map[t] for t in m["team_keys"] if t in user_map]
+        
+        matter = Matter(**m, client=client, assigned_team=team) # Unpacking dict
+        await matter.insert()
+        matter_id_map[k] = str(matter.id)
+
+    print("✅ Users & Matters seeded.")
+    return matter_id_map
+
+async def upload_docs(matter_map):
+    """PHASE 2: Uploads text via API to trigger Vectorization."""
+    print("\n🚀 PHASE 2: Uploading Docs via API...")
+
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        # 1. Login
+        resp = await client.post(f"{API_BASE}/login/access-token", data={
+            "username": "bob.vance@lawfirm.com", 
+            "password": COMMON_PASSWORD
+        })
+        token = resp.json().get("access_token")
+        if not token:
+            print("❌ Login Failed"); return
+
+        # 2. Upload Loop
+        for doc in RAW_DOCS:
+            mid = matter_map.get(doc["matter_id"])
+            if not mid: continue
+
+            print(f" 📤 Sending {doc['filename']}...", end="")
+            
+            try:
+                # Matching your Router's JSON schema
+                resp = await client.post(
+                    f"{API_BASE}/documents/upload",
+                    headers={"Authorization": f"Bearer {token}"},
+                    json={
+                        "matter_id": mid,
+                        "filename": doc["filename"],
+                        "content": doc["content_text"],
+                        "sensitivity": doc["sensitivity"]
+                    }
+                )
+                print(" ✅ OK" if resp.status_code == 200 else f" ❌ {resp.status_code}")
+            except Exception as e:
+                print(f" ❌ Error: {e}")
+
+async def main():
+    matter_ids = await seed_db()
+    await upload_docs(matter_ids)
+
+if __name__ == "__main__":
+    asyncio.run(main())
