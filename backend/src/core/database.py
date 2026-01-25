@@ -2,14 +2,12 @@
 from xmlrpc import client
 from motor.motor_asyncio import AsyncIOMotorClient
 from beanie import init_beanie  
-from qdrant_client import QdrantClient , models
+from qdrant_client import QdrantClient, models
 import os
 import ssl
 from .config import MONGO_URI, QDRANT_URL, QDRANT_API_KEY
 import certifi
 # Import the models to register in the module
-# Using absolute imports to handle module names with dots
-
 from models.message import Conversation
 from models.matters import Matter
 from models.auth import User
@@ -36,21 +34,26 @@ async def init_db():
     
     print("✅ Database initialized! MongoDB and Beanie are connected.")
   
-    
     # Initialize Qdrant Client
     qdrant_client = QdrantClient(
         url=QDRANT_URL, 
         api_key=QDRANT_API_KEY
-        )
+    )
     
     collection_name = "legal_documents"
 
+    # --- EDITED SECTION: SAFE INITIALIZATION ---
+    
+    # Check if the collection exists
     if qdrant_client.collection_exists(collection_name):
-        qdrant_client.delete_collection(collection_name) 
-    if not qdrant_client.collection_exists(collection_name):
-        print(f"Creating Cloud collection: {collection_name}")
+        # If it exists, do NOTHING. Just print success.
+        print(f"✅ Qdrant collection '{collection_name}' already exists. Skipping creation.")
         
-        qdrant_client.recreate_collection(
+    else:
+        # Only create if it does NOT exist
+        print(f"⚠️ Collection '{collection_name}' not found. Creating Cloud collection...")
+        
+        qdrant_client.create_collection(
            collection_name=collection_name,
            vectors_config={
                "dense_vector": models.VectorParams(
@@ -77,8 +80,6 @@ async def init_db():
             field_schema=models.PayloadSchemaType.KEYWORD
         )
         
-        print("✅ Qdrant client initialized and collection is ready!")
-    else:
-        print(f"Qdrant collection '{collection_name}' already exists.")
+        print("✅ Qdrant collection created and indexes set!")
     
     return mongo_client, qdrant_client

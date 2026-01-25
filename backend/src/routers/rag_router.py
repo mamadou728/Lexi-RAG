@@ -40,28 +40,34 @@ async def ask_lexi(
 
     print(f"👤 Authenticated Search for: {current_user.email} ({current_user.system_role})")
 
-    # Pass the TRUSTED role from the database, not the user input
-    retrieved_docs = rag.retrieve_safe_documents(
-        query=payload.query,
-        user_role=current_user.system_role, # <--- Comes from DB
-        top_k=5 
-    )
-
-    answer_text = rag.generate_legal_answer(
-        query=payload.query,
-        context_docs=retrieved_docs
-    )
-
-    formatted_sources = [
-        SourceDocument(
-            filename=doc['filename'],
-            sensitivity=doc['sensitivity'],
-            score=doc['score']
+    try:
+        # Pass the TRUSTED role from the database, not the user input
+        retrieved_docs = rag.retrieve_safe_documents(
+            query=payload.query,
+            user_role=current_user.system_role, # <--- Comes from DB
+            top_k=5 
         )
-        for doc in retrieved_docs
-    ]
 
-    return SearchResponse(
-        ai_answer=answer_text,
-        sources=formatted_sources
-    )
+        answer_text = rag.generate_legal_answer(
+            query=payload.query,
+            context_docs=retrieved_docs
+        )
+
+        formatted_sources = [
+            SourceDocument(
+                filename=doc['filename'],
+                sensitivity=doc['sensitivity'],
+                score=doc['score']
+            )
+            for doc in retrieved_docs
+        ]
+
+        return SearchResponse(
+            ai_answer=answer_text,
+            sources=formatted_sources
+        )
+    except Exception as e:
+        print(f"❌ Error in RAG query: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")

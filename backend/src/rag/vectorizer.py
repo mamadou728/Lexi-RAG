@@ -126,26 +126,70 @@ def retrieve_safe_documents(query: str, user_role: SystemRole, top_k: int = 3) -
         ]
     )
 
-    # C. Search
-    query_vector = embedding_model.encode(query, return_dense=True)['dense_vecs']
+    # C. Search with Qdrant
+    # Encode query - returns dict with 'dense_vecs' key containing numpy array
+    embeddings_result = embedding_model.encode(query, return_dense=True)
+    query_vector = embeddings_result['dense_vecs']
     
-    hits = qdrant_client.search(
-        collection_name=COLLECTION_NAME,
-        query_vector=("dense_vector", query_vector.tolist() if hasattr(query_vector, 'tolist') else query_vector),  # Convert to list
-        query_filter=security_filter,
-        limit=top_k
-    )
+    # Convert numpy array to list for Qdrant
+    if hasattr(query_vector, 'tolist'):
+        query_vector_list = query_vector.tolist()
+    else:
+        query_vector_list = list(query_vector)
+    
+    print(f"🔍 Searching Qdrant with query vector (length: {len(query_vector_list)})")
+    print(f"   Allowed sensitivities: {allowed_levels}")
+    print(f"   Collection: {COLLECTION_NAME}")
+    
+    try:
+        # Use query_points for newer Qdrant client with named vectors
+        response = qdrant_client.query_points(
+            collection_name=COLLECTION_NAME,
+            query=query_vector_list,
+            using="dense_vector",  # Specify which named vector to use
+            query_filter=security_filter,
+            limit=top_k
+        )
+        
+        hits = response.points  # Extract points from response
+        print(f"   Found {len(hits)} results")
+        
+        if len(hits) == 0:
+            # Try without filter to see if documents exist
+            print("   ⚠️  No results with filter. Checking without filter...")
+            response_no_filter = qdrant_client.query_points(
+                collection_name=COLLECTION_NAME,
+                query=query_vector_list,
+                using="dense_vector",
+                limit=top_k
+            )
+            hits_no_filter = response_no_filter.points
+            print(f"   Found {len(hits_no_filter)} results without filter")
+            if len(hits_no_filter) > 0:
+                print(f"   Sample payload keys: {hits_no_filter[0].payload.keys() if hits_no_filter[0].payload else 'No payload'}")
+        
+    except Exception as e:
+        print(f"   ❌ Qdrant search error: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
 
     # D. Clean Results
-    return [
-        {
-            "filename": hit.payload.get("filename"),
-            "sensitivity": hit.payload.get("sensitivity"),
-            "text": hit.payload.get("text_snippet"),
-            "score": hit.score
-        }
-        for hit in hits
-    ]
+    results = []
+    for hit in hits:
+        try:
+            results.append({
+                "filename": hit.payload.get("filename", "Unknown"),
+                "sensitivity": hit.payload.get("sensitivity", "unknown"),
+                "text": hit.payload.get("text_snippet", ""),
+                "score": hit.score if hasattr(hit, 'score') else 0.0
+            })
+        except Exception as e:
+            print(f"   ⚠️  Error processing hit: {e}")
+            continue
+    
+    print(f"   ✅ Returning {len(results)} formatted results")
+    return results
 
 
 def generate_legal_answer(query: str, context_docs: List[Dict]) -> str:
