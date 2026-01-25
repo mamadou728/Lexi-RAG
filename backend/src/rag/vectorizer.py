@@ -131,7 +131,7 @@ def retrieve_safe_documents(query: str, user_role: SystemRole, top_k: int = 3) -
     
     hits = qdrant_client.search(
         collection_name=COLLECTION_NAME,
-        query_vector=("dense_vector", query_vector),  # Specify named vector
+        query_vector=("dense_vector", query_vector.tolist() if hasattr(query_vector, 'tolist') else query_vector),  # Convert to list
         query_filter=security_filter,
         limit=top_k
     )
