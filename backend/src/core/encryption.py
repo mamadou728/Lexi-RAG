@@ -11,7 +11,8 @@ class AES256Service:
     def __init__(self, key_hex: str = None):
         # 1. Load Key
         # We expect a 64-character hex string (32 bytes) from env vars for safety
-        key_str = key_hex or os.getenv("APP_ENCRYPTION_KEY")
+        # Try both Encryption_Key (user's .env) and APP_ENCRYPTION_KEY (standard name)
+        key_str = key_hex or os.getenv("Encryption_Key") or os.getenv("APP_ENCRYPTION_KEY")
         
         if not key_str:
             raise ValueError("CRITICAL: No encryption key found!")

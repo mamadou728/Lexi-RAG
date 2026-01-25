@@ -1,14 +1,15 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from bson import ObjectId
-from qdrant_client import QdrantClient 
-
-# Import your models, encryption, and the vector tool
+from qdrant_client import QdrantClient, models  # <--- Added 'models' for filtering
 from models.documents import DocumentFile, SensitivityLevel
 from models.matters import Matter
 from core.encryption import AES256Service
 from rag.vectorizer import vectorize 
 from core.config import QDRANT_URL, QDRANT_API_KEY 
+import asyncio  
+from fastapi.concurrency import run_in_threadpool
+
 
 router = APIRouter(prefix="/documents", tags=["Secure Documents"])
 
@@ -42,6 +43,7 @@ async def upload_document(
     """
     1. Encrypts content -> MongoDB (The Vault)
     2. Vectorizes content -> Qdrant (The Brain)
+    3. Verifies Qdrant Storage -> Confirms (The Check)
     """
     
     # A. Validate Matter ID
@@ -66,32 +68,64 @@ async def upload_document(
         is_vectorized=False 
     )
     
-    # Save to MongoDB first (Safety First)
+    # Save to MongoDB first
     await new_doc.insert()
 
-    # C. VECTORIZATION (Qdrant)
+   # C. VECTORIZATION & VERIFICATION
+    verification_msg = "Pending"
+    
     try:
-        vectorize(
+        # --- THE FIX: Run blocking code in a threadpool ---
+        await run_in_threadpool(
+            vectorize, 
             content_text=payload.content, 
             metadata={
-                "mongo_document_id": str(new_doc.id), # Linking ID
+                "mongo_document_id": str(new_doc.id),
                 "filename": payload.filename,
                 "matter_id": payload.matter_id,
                 "sensitivity": payload.sensitivity
             },
             qdrant_client=qdrant_client
         )
+        # -------------------------------------------------
         
-        # Update flag
-        new_doc.is_vectorized = True
+        # Give Qdrant a moment
+        await asyncio.sleep(1.0) 
+
+        # The check (Async is fine here because client.scroll is fast/network bound)
+        # Note: If qdrant_client is the synchronous client, wrap this too!
+        # Assuming qdrant_client is standard sync client:
+        scroll_result, _ = await run_in_threadpool(
+            qdrant_client.scroll,
+            collection_name="legal_documents",
+            scroll_filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="mongo_document_id",
+                        match=models.MatchValue(value=str(new_doc.id))
+                    )
+                ]
+            ),
+            limit=1
+        )
+
+        if scroll_result:
+            new_doc.is_vectorized = True
+            verification_msg = "Verified: Found in Vector DB"
+        else:
+            verification_msg = "Warning: Upload ran, but not found."
+            print(f"⚠️ Doc {new_doc.id} missing from Qdrant.")
+
         await new_doc.save()
         
     except Exception as e:
-        print(f"⚠️ Vectorization Error: {e}")
+        print(f"⚠️ Error: {e}")
+        # Check your SERVER TERMINAL for the full error if this happens!
+        verification_msg = f"Failed: {str(e)}"
 
     return DocumentResponse(
         document_id=str(new_doc.id),
         filename=new_doc.filename,
-        message="Document uploaded, encrypted, and indexed.",
+        message=f"Status: {verification_msg}",
         is_vectorized=new_doc.is_vectorized
     )

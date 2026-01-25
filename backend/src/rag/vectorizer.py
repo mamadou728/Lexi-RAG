@@ -82,7 +82,7 @@ def vectorize_and_upload(content_text: str, metadata: Dict[str, Any]):
 
         points.append(PointStruct(
             id=str(uuid.uuid4()),
-            vector=vector.tolist(),
+            vector={"dense_vector": vector.tolist()},  # Named vector to match collection schema
             payload=payload
         ))
 
@@ -131,7 +131,7 @@ def retrieve_safe_documents(query: str, user_role: SystemRole, top_k: int = 3) -
     
     hits = qdrant_client.search(
         collection_name=COLLECTION_NAME,
-        query_vector=query_vector,
+        query_vector=("dense_vector", query_vector),  # Specify named vector
         query_filter=security_filter,
         limit=top_k
     )

@@ -52,13 +52,31 @@ async def init_db():
         
         qdrant_client.recreate_collection(
            collection_name=collection_name,
-    vectors_config={
-        "dense_vector": models.VectorParams(
-            size=1024,  
-            distance=models.Distance.COSINE
+           vectors_config={
+               "dense_vector": models.VectorParams(
+                   size=1024,  
+                   distance=models.Distance.COSINE
+               )
+           },
         )
-    },
-)
+        
+        # Create payload indexes for filtering
+        qdrant_client.create_payload_index(
+            collection_name=collection_name,
+            field_name="mongo_document_id",
+            field_schema=models.PayloadSchemaType.KEYWORD
+        )
+        qdrant_client.create_payload_index(
+            collection_name=collection_name,
+            field_name="sensitivity",
+            field_schema=models.PayloadSchemaType.KEYWORD
+        )
+        qdrant_client.create_payload_index(
+            collection_name=collection_name,
+            field_name="matter_id",
+            field_schema=models.PayloadSchemaType.KEYWORD
+        )
+        
         print("✅ Qdrant client initialized and collection is ready!")
     else:
         print(f"Qdrant collection '{collection_name}' already exists.")

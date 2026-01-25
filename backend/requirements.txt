@@ -24,6 +24,7 @@ cryptography        # REQUIRED for Fernet (AES-256) encryption of text
 
 # Layer 4: RBAC & Auth
 passlib[bcrypt]     # REQUIRED to hash user passwords (never store plain text)
+bcrypt==3.2.2       # Pin to version compatible with passlib 1.7.4
 python-jose[cryptography] # REQUIRED to generate JWT tokens for session handling
 python-multipart    # REQUIRED for FastAPI login forms
 email-validator      # REQUIRED for Pydantic EmailStr validation
