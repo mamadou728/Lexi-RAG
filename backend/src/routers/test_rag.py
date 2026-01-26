@@ -145,9 +145,9 @@ async def quick_test():
     
     async with httpx.AsyncClient(timeout=60.0) as client:
         # Login as partner
-        print("🔐 Logging in as bob.vance@lawfirm.com...")
+        print("🔐 Logging in as pam.beesly@lawfirm.com...")
         login_start = time.time()
-        token = await login(client, "bob.vance@lawfirm.com", "password123")
+        token = await login(client, "pam.beesly@lawfirm.com", "password123")
         login_time = time.time() - login_start
         
         if not token:
@@ -156,7 +156,7 @@ async def quick_test():
         print(f"✅ Login successful [{login_time:.3f}s]\n")
         
         # Ask question
-        query = "What is the purchase price for the AI_Startup acquisition?"
+        query = "What does the $5,000,000 figure refer to in the documents?"
         print(f"❓ Question: \"{query}\"\n")
         print("⏳ Searching and generating answer...\n")
         

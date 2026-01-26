@@ -1,8 +1,10 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
+from backend.src.routers import chat
 from core.database import init_db
-from routers import auth_router, documents_router, rag_router 
+from routers import auth_router, documents_router 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -30,10 +32,19 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # Next.js dev server
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Register the Routers
 app.include_router(auth_router.router)       # /auth/login
 app.include_router(documents_router.router)  # /documents/upload
-app.include_router(rag_router.router)        # /search/query
+app.include_router(chat.router)        # /search/query
 
 @app.get("/")
 async def root():

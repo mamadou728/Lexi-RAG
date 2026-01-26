@@ -5,7 +5,7 @@ from qdrant_client import QdrantClient, models  # <--- Added 'models' for filter
 from models.documents import DocumentFile, SensitivityLevel
 from models.matters import Matter
 from core.encryption import AES256Service
-from rag.vectorizer import vectorize 
+from rag import vectorize 
 from core.config import QDRANT_URL, QDRANT_API_KEY 
 import asyncio  
 from fastapi.concurrency import run_in_threadpool

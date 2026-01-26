@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from core.security import verify_password, create_access_token
+from core.security import get_current_user, verify_password, create_access_token
 from models.auth import User
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -27,3 +27,18 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     access_token = create_access_token(data={"sub": user.email})
 
     return {"access_token": access_token, "token_type": "bearer"}
+
+@router.post("/logout")
+async def logout():
+    """
+    Dummy logout endpoint.
+    In a real-world scenario, you might blacklist the token or handle it client-side.
+    """
+    return {"message": "Logout successful"} 
+
+@router.get("/me")
+async def read_users_me(current_user: User = Depends(get_current_user)):
+    """
+    Get current authenticated user info.
+    """
+    return current_user
